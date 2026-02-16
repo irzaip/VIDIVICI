@@ -1,0 +1,792 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VIDIVICI - AI Video Generator</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            min-height: 100vh;
+            color: #fff;
+            padding: 20px;
+        }
+        .container { max-width: 1200px; margin: 0 auto; }
+        h1 {
+            text-align: center;
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            background: linear-gradient(90deg, #00d4ff, #7b2ff7);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .subtitle { text-align: center; color: #888; margin-bottom: 30px; }
+        .card {
+            background: rgba(255,255,255,0.05);
+            border-radius: 16px;
+            padding: 24px;
+            margin-bottom: 20px;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        .form-group { margin-bottom: 20px; }
+        .form-group label { display: block; margin-bottom: 8px; color: #aaa; }
+        .form-group input, .form-group textarea, .form-group select {
+            width: 100%;
+            padding: 12px;
+            border-radius: 8px;
+            background: rgba(255,255,255,0.1);
+            color: #fff;
+            border: 1px solid rgba(255,255,255,0.2);
+            font-size: 14px;
+        }
+        .form-group textarea { min-height: 150px; resize: vertical; }
+        .row { display: flex; gap: 20px; }
+        .col { flex: 1; }
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+        }
+        .btn-primary { background: linear-gradient(90deg, #00d4ff, #7b2ff7); color: #fff; }
+        .btn-secondary { background: rgba(255,255,255,0.1); color: #fff; }
+        .steps {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        .step {
+            padding: 10px 20px;
+            border-radius: 20px;
+            background: rgba(255,255,255,0.1);
+            color: #888;
+        }
+        .step.active { background: linear-gradient(90deg, #00d4ff, #7b2ff7); color: #fff; }
+        .step.completed { background: #27ae60; color: #fff; }
+        .hidden { display: none !important; }
+        .selection-grid { display: flex; flex-direction: column; gap: 20px; }
+        .shot-item { background: rgba(255,255,255,0.05); padding: 20px; border-radius: 12px; }
+        .image-options { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 15px; }
+        .image-option {
+            position: relative;
+            cursor: pointer;
+            border-radius: 8px;
+            overflow: hidden;
+            border: 3px solid transparent;
+            transition: all 0.3s;
+        }
+        .image-option.selected { border-color: #00d4ff; }
+        .image-option.has-video { border-color: #27ae60; }
+        .image-option.has-video.selected { border-color: #00d4ff; }
+        .image-option img { width: 100%; height: auto; display: block; }
+        .loading {
+            text-align: center;
+            padding: 60px;
+        }
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid rgba(255,255,255,0.1);
+            border-top-color: #00d4ff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .results-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 20px; }
+        .result-item {
+            background: rgba(255,255,255,0.05);
+            padding: 20px;
+            border-radius: 12px;
+            text-align: center;
+        }
+        .result-item video { width: 100%; border-radius: 8px; }
+        .loading-status {
+            background: rgba(255,255,255,0.1);
+            padding: 10px;
+            border-radius: 8px;
+            margin-top: 10px;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div>
+                <h1>VIDIVICI</h1>
+                <p class="subtitle">AI Video Generator from Storyboard</p>
+            </div>
+            <button onclick="currentStep = 1; showHomeStep();" style="background: #e74c3c; color: white; padding: 10px 20px; font-size: 14px; border: none; border-radius: 8px; cursor: pointer;">🏠 Home</button>
+        </div>
+        
+        <div class="steps">
+            <div class="step active" id="step1">1. Input</div>
+            <div class="step" id="step2">2. Confirm</div>
+            <div class="step" id="step3">3. Select Images</div>
+            <div class="step" id="step4">4. Generate Videos</div>
+        </div>
+        
+        <div class="card" style="margin-bottom: 20px;">
+            <h3>Existing Projects</h3>
+            <div id="projectList" style="margin-bottom: 15px; color: #fff;">Loading...</div>
+            <button onclick="refreshProjects()" style="background: #95a5a6;">Refresh</button>
+        </div>
+        
+        <div id="step-1" class="card">
+            <div class="form-group">
+                <label for="projectName">Project Name</label>
+                <input type="text" id="projectName" placeholder="my_video_project">
+            </div>
+            
+            <div class="row">
+                <div class="col">
+                    <div class="form-group">
+                        <label for="imageModel">Image Model</label>
+                        <select id="imageModel">
+                            {% for model in image_models %}
+                            <option value="{{ model.id }}" {% if model.id == 'seedream_v4.5' %}selected{% endif %}>{{ model.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <div class="col">
+                    <div class="form-group">
+                        <label for="aspectRatio">Default Aspect Ratio</label>
+                        <select id="aspectRatio">
+                            {% for ratio in aspect_ratios %}
+                            <option value="{{ ratio.id }}" {% if ratio.id == '9:16' %}selected{% endif %}>{{ ratio.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="form-group">
+                <label for="storyboard">Paste Storyboard (Markdown)</label>
+                <textarea id="storyboard" placeholder="# My Storyboard
+
+## Shot 01
+Prompt Video: A cinematic shot of...
+
+## Shot 02
+Prompt Video: Another scene..."></textarea>
+            </div>
+            
+            <button class="btn btn-primary" onclick="parseStoryboard()">Parse Storyboard</button>
+        </div>
+        
+        <div id="loading" class="card hidden">
+            <div class="loading">
+                <div class="spinner"></div>
+                <p id="loadingText">Processing...</p>
+            </div>
+        </div>
+        
+        <div id="step-2" class="card hidden">
+            <h2>Confirm Shots</h2>
+            <p style="color: #888; margin-bottom: 20px;">Review the extracted shots before generating images.</p>
+            <div id="shotList" class="shot-list"></div>
+            
+            <div style="margin-top: 20px; display: flex; gap: 10px;">
+                <button class="btn btn-secondary" onclick="goToStep(1)">Back</button>
+                <button class="btn btn-primary" onclick="startImageGeneration()">Start Generating Images</button>
+            </div>
+        </div>
+        
+        <div id="step-3" class="card hidden">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <div>
+                    <h2 style="margin: 0;">Select Images</h2>
+                    <p style="color: #888; font-size: 12px; margin: 5px 0 0 0;">Select 1-2 images per shot</p>
+                </div>
+                <button class="btn btn-secondary" onclick="refreshImages()" style="padding: 8px 16px;">🔄 Refresh</button>
+            </div>
+            
+            <div id="selectionGrid" class="selection-grid"></div>
+            
+            <div style="margin-top: 20px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                <button class="btn btn-secondary" onclick="goToStep(2)">← Back</button>
+                <label style="color: #aaa; margin-left: 10px;">Video Model:</label>
+                <select id="videoModel" style="padding: 8px; border-radius: 6px; background: rgba(255,255,255,0.1); color: #fff; border: 1px solid rgba(255,255,255,0.2);">
+                    <option value="kling_2.1" selected>Kling 2.1</option>
+                    <option value="veo2">Veo 2</option>
+                    <option value="veo3">Veo 3</option>
+                    <option value="wan2.1">Wan 2.1</option>
+                    <option value="vidu">Vidu</option>
+                    <option value="magi">MAGI-1</option>
+                </select>
+                <button class="btn btn-primary" onclick="generateVideos()">Generate Videos</button>
+            </div>
+        </div>
+        
+        <div id="step-4" class="card hidden">
+            <h2>Generating Videos</h2>
+            <div id="videoResults" class="results-grid"></div>
+            
+            <div style="margin-top: 20px;">
+                <button class="btn btn-secondary" onclick="location.reload()">Start Over</button>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        console.log('Script loading...');
+        let currentStep = 1;
+        let parsedShots = [];
+        let imageResults = {};
+        let projectName = '';
+        
+        function log(msg, type = 'info') {
+            const consoleDiv = document.getElementById('statusConsole');
+            if (!consoleDiv) return;
+            const time = new Date().toLocaleTimeString();
+            const color = type === 'error' ? '#e74c3c' : type === 'success' ? '#27ae60' : '#00d4ff';
+            consoleDiv.innerHTML += `<div style="color: ${color}; padding: 2px 0;">[${time}] ${msg}</div>`;
+            consoleDiv.scrollTop = consoleDiv.scrollHeight;
+        }
+        
+        async function refreshProjects() {
+            log('Refreshing projects list...');
+            try {
+                const resp = await fetch('/api/projects');
+                const projects = await resp.json();
+                const container = document.getElementById('projectList');
+                if (projects.length === 0) {
+                    container.innerHTML = '<p style="color: #fff;">No projects found</p>';
+                    return;
+                }
+                let html = '<div style="display: flex; flex-direction: column; gap: 10px;">';
+                projects.forEach(p => {
+                    html += `
+                        <div style="display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.1); padding: 10px; border-radius: 8px; color: #fff;">
+                            <div>
+                                <strong>${p.name}</strong> - Shots: ${p.shots?.length || 0} | Images: ${p.image_count} | Videos: ${p.video_count}
+                            </div>
+                            <div>
+                                <button onclick="loadExistingProject('${p.name}')" style="background: #27ae60;">Load</button>
+                                <button onclick="viewProjectImages('${p.name}')" style="background: #3498db;">Images</button>
+                                <button onclick="viewProjectVideos('${p.name}')" style="background: #9b59b6;">Videos</button>
+                            </div>
+                        </div>`;
+                });
+                html += '</div>';
+                container.innerHTML = html;
+            } catch(e) {
+                document.getElementById('projectList').innerHTML = '<p style="color: red;">Error: ' + e.message + '</p>';
+            }
+        }
+        
+        async function loadExistingProject(name) {
+            log('Loading project: ' + name);
+            projectName = name;
+            document.getElementById('projectName').value = name;
+            
+            const container = document.getElementById('selectionGrid');
+            container.innerHTML = '<p style="color: #fff;">Loading...</p>';
+            
+            try {
+                const [imagesResp, videosResp] = await Promise.all([
+                    fetch(`/api/projects/${name}/images`),
+                    fetch(`/api/projects/${name}/videos`)
+                ]);
+                
+                const data = await imagesResp.json();
+                const videosData = await videosResp.json();
+                
+                const generatedVideos = new Set();
+                if (videosData.videos) {
+                    videosData.videos.forEach(v => {
+                        const baseName = v.name.replace('.mp4', '').toLowerCase();
+                        generatedVideos.add(baseName);
+                    });
+                }
+                
+                if (!data.images || data.images.length === 0) {
+                    container.innerHTML = '<p style="color: red;">No images found</p>';
+                    return;
+                }
+                
+                const shotsMap = {};
+                data.images.forEach(img => {
+                    const match = img.name.match(/^(SHOT-\d+)-(.+)\.JPG$/i);
+                    if (match) {
+                        const shotName = match[1];
+                        const variant = match[2];
+                        if (!shotsMap[shotName]) shotsMap[shotName] = [];
+                        shotsMap[shotName].push({ name: img.name, url: img.url, variant: variant });
+                    }
+                });
+                
+                let html = '';
+                
+                Object.keys(shotsMap).sort().forEach(shotName => {
+                    const variants = shotsMap[shotName];
+                    html += `<div class="shot-item" style="background: rgba(255,255,255,0.1); padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+                        <h4 style="color: #fff;">${shotName}</h4>
+                        <div class="image-options" data-shot="${shotName.replace('SHOT-', '').replace(/^0+/, '')}" style="display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px;">`;
+                    
+                    variants.forEach((v, idx) => {
+                        const videoKey = `${shotName}-${v.variant}`.toLowerCase();
+                        const hasVideo = generatedVideos.has(videoKey);
+                        const cssClass = hasVideo ? 'image-option has-video' : 'image-option';
+                        html += `<div class="${cssClass}" data-variant="${v.variant}" data-shot="${shotName}" onclick="this.classList.toggle('selected'); event.stopPropagation();" style="cursor: pointer; display: inline-block; margin: 5px; position: relative;">
+                            ${hasVideo ? '<span style="position: absolute; top: 5px; right: 5px; background: #27ae60; color: white; padding: 2px 6px; border-radius: 4px; font-size: 10px;">✓ Video</span>' : ''}
+                            <img src="${v.url}" style="width: 150px; height: auto; border-radius: 4px;">
+                        </div>`;
+                    });
+                    
+                    html += '</div></div>';
+                });
+                
+                container.innerHTML = html;
+                goToStep(3);
+            } catch(e) {
+                container.innerHTML = '<p style="color: red;">Error: ' + e.message + '</p>';
+            }
+        }
+        
+        async function viewProjectImages(name) {
+            try {
+                const resp = await fetch(`/api/projects/${name}/images`);
+                const data = await resp.json();
+                const container = document.getElementById('projectList');
+                if (data.images && data.images.length > 0) {
+                    let html = `<h4 style="color: #fff;">${name} - Images</h4><div style="display: flex; flex-wrap: wrap; gap: 10px;">`;
+                    data.images.forEach(img => {
+                        html += `<img src="${img.url}" style="width: 100px; height: auto; border-radius: 4px;">`;
+                    });
+                    html += '</div><button onclick="refreshProjects()" style="margin-top: 10px;">Back</button>';
+                    container.innerHTML = html;
+                } else {
+                    container.innerHTML = '<p style="color: #fff;">No images found</p><button onclick="refreshProjects()">Back</button>';
+                }
+            } catch(e) {
+                alert('Error: ' + e.message);
+            }
+        }
+        
+        async function viewProjectVideos(name) {
+            try {
+                const resp = await fetch(`/api/projects/${name}/videos`);
+                const data = await resp.json();
+                const container = document.getElementById('projectList');
+                if (data.videos && data.videos.length > 0) {
+                    let html = `<h4 style="color: #fff;">${name} - Videos</h4><div style="display: flex; flex-wrap: wrap; gap: 10px;">`;
+                    data.videos.forEach(vid => {
+                        html += `<div><video src="${vid.url}" style="width: 150px;" controls></video><p style="color: #fff;">${vid.name}</p></div>`;
+                    });
+                    html += '</div><button onclick="refreshProjects()" style="margin-top: 10px;">Back</button>';
+                    container.innerHTML = html;
+                } else {
+                    container.innerHTML = '<p style="color: #fff;">No videos found</p><button onclick="refreshProjects()">Back</button>';
+                }
+            } catch(e) {
+                alert('Error: ' + e.message);
+            }
+        }
+        
+        refreshProjects();
+        
+        function showHomeStep() {
+            document.querySelectorAll('.card').forEach(el => el.classList.add('hidden'));
+            document.getElementById('loading').classList.add('hidden');
+            document.getElementById('step-1').classList.remove('hidden');
+            document.getElementById('projectList').closest('.card').classList.remove('hidden');
+            
+            document.querySelectorAll('.step').forEach((el, i) => {
+                el.classList.remove('active', 'completed');
+                if (i + 1 === 1) el.classList.add('active');
+            });
+            refreshProjects();
+        }
+        
+        function showStep(stepNum) {
+            document.querySelectorAll('.card').forEach(el => el.classList.add('hidden'));
+            document.getElementById('loading').classList.add('hidden');
+            
+            document.getElementById(`step-${stepNum}`).classList.remove('hidden');
+            
+            document.querySelectorAll('.step').forEach((el, i) => {
+                el.classList.remove('active', 'completed');
+                if (i + 1 < stepNum) el.classList.add('completed');
+                if (i + 1 === stepNum) el.classList.add('active');
+            });
+        }
+        
+        function goToStep(stepNum) {
+            currentStep = stepNum;
+            showStep(stepNum);
+        }
+        
+        function showLoading(text) {
+            document.querySelectorAll('.card').forEach(el => el.classList.add('hidden'));
+            document.getElementById('loading').classList.remove('hidden');
+            document.getElementById('loadingText').textContent = text;
+        }
+        
+        async function parseStoryboard() {
+            const storyboard = document.getElementById('storyboard').value;
+            projectName = document.getElementById('projectName').value.trim();
+            
+            if (!projectName) {
+                alert('Please enter a project name');
+                return;
+            }
+            if (!storyboard.trim()) {
+                alert('Please paste a storyboard');
+                return;
+            }
+            
+            const imageModel = document.getElementById('imageModel').value;
+            const aspectRatio = document.getElementById('aspectRatio').value;
+            
+            log('Parsing storyboard: ' + projectName);
+            showLoading('Parsing storyboard...');
+            
+            try {
+                const response = await fetch('/api/parse', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        project_name: projectName,
+                        storyboard: storyboard,
+                        image_model: imageModel,
+                        aspect_ratio: aspectRatio
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (!data.success) {
+                    alert('Error parsing storyboard');
+                    return;
+                }
+                
+                parsedShots = data.shots;
+                renderShots();
+                goToStep(2);
+                log('Parsed ' + parsedShots.length + ' shots', 'success');
+            } catch(e) {
+                alert('Error: ' + e.message);
+            }
+        }
+        
+        function renderShots() {
+            const container = document.getElementById('shotList');
+            let html = '';
+            
+            parsedShots.forEach((shot, idx) => {
+                html += `
+                    <div class="shot-item" style="background: rgba(255,255,255,0.05); padding: 15px; border-radius: 8px; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: flex-start;">
+                        <div style="flex: 1;">
+                            <h4 style="color: #fff;">Shot ${shot.shot_number}</h4>
+                            <div class="form-group" style="margin-top: 10px;">
+                                <label>Prompt</label>
+                                <textarea id="prompt-${idx}" style="min-height: 60px;">${shot.prompt || ''}</textarea>
+                            </div>
+                            <div class="row">
+                                <div class="col">
+                                    <label>Image Model</label>
+                                    <select id="model-${idx}">
+                                        <option value="seedream_v4.5" ${shot.image_model === 'seedream_v4.5' ? 'selected' : ''}>Seedream v4.5</option>
+                                        <option value="flux_dev" ${shot.image_model === 'flux_dev' ? 'selected' : ''}>FLUX.1 Dev</option>
+                                    </select>
+                                </div>
+                                <div class="col">
+                                    <label>Aspect Ratio</label>
+                                    <select id="aspect-${idx}">
+                                        <option value="9:16" ${(shot.aspect_ratio || '9:16') === '9:16' ? 'selected' : ''}>9:16 Portrait</option>
+                                        <option value="16:9" ${shot.aspect_ratio === '16:9' ? 'selected' : ''}>16:9 Landscape</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                        <button onclick="deleteShot(${idx})" style="background: #e74c3c; color: white; padding: 8px 12px; border: none; border-radius: 4px; cursor: pointer; margin-left: 10px;">Delete</button>
+                    </div>
+                `;
+            });
+            
+            container.innerHTML = html;
+        }
+        
+        function deleteShot(idx) {
+            if (parsedShots.length <= 1) {
+                alert('Cannot delete the last shot');
+                return;
+            }
+            parsedShots.splice(idx, 1);
+            renderShots();
+        }
+        
+        function getEditedShots() {
+            return parsedShots.map((shot, idx) => ({
+                ...shot,
+                prompt: document.getElementById(`prompt-${idx}`)?.value || shot.prompt,
+                image_model: document.getElementById(`model-${idx}`)?.value || shot.image_model,
+                aspect_ratio: document.getElementById(`aspect-${idx}`)?.value || shot.aspect_ratio
+            }));
+        }
+        
+        async function startImageGeneration() {
+            const shotsToGenerate = getEditedShots();
+            log('Shots to generate: ' + JSON.stringify(shotsToGenerate.map(s => s.shot_number)));
+            
+            if (shotsToGenerate.some(s => !s.prompt || !s.prompt.trim())) {
+                alert('Please fill in all prompts before generating');
+                return;
+            }
+            
+            imageResults = {};
+            parsedShots = shotsToGenerate;
+            
+            goToStep(3);
+            renderSelection();
+            log('Starting image generation for ' + shotsToGenerate.length + ' shots');
+            
+            const totalShots = shotsToGenerate.length;
+            
+            for (let i = 0; i < totalShots; i++) {
+                const shot = shotsToGenerate[i];
+                const shotNum = shot.shot_number;
+                
+                log('Calling API for shot: ' + shotNum);
+                showLoading(`Generating images for shot ${shotNum} (${i+1}/${totalShots})...`);
+                log(`Generating images for shot ${shotNum}...`);
+                
+                try {
+                    const response = await fetch('/api/generate-images', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({
+                            project_name: projectName,
+                            shots: [shot],
+                            image_model: shot.image_model || document.getElementById('imageModel').value,
+                            aspect_ratio: shot.aspect_ratio || document.getElementById('aspectRatio').value
+                        })
+                    });
+                    
+                    const data = await response.json();
+                    log('API response: success=' + data.success);
+                    
+                    if (data.success && data.results && data.results.length > 0) {
+                        const shotNum = data.results[0].shot.shot_number;
+                        imageResults[shotNum] = data.results[0].images;
+                        renderSelection();
+                        log('Generated images for shot ' + shotNum, 'success');
+                    } else {
+                        log('Failed: ' + JSON.stringify(data), 'error');
+                    }
+                } catch (err) {
+                    console.error('Error:', err);
+                    log('Error: ' + err.message, 'error');
+                }
+            }
+            
+            log('All images generated!', 'success');
+            goToStep(3);
+            renderSelection();
+            alert('Images generation complete!');
+        }
+        
+        function renderSelection() {
+            const container = document.getElementById('selectionGrid');
+            let html = '';
+            
+            parsedShots.forEach(shot => {
+                const shotNum = shot.shot_number;
+                const images = imageResults[shotNum] || [];
+                
+                html += `
+                    <div class="shot-item" style="background: rgba(255,255,255,0.1); padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+                        <h4 style="color: #fff;">Shot ${shotNum}</h4>
+                        <p style="color: #888; font-size: 12px;">${shot.prompt?.substring(0, 100)}...</p>
+                        <div class="image-options" data-shot="${shotNum}" style="display: flex; flex-wrap: wrap; gap: 10px; margin-top: 15px;">
+                `;
+                
+                images.forEach((img, idx) => {
+                    if (img.error) return;
+                    html += `
+                        <div class="image-option" data-variant="${img.variant}" onclick="this.classList.toggle('selected'); event.stopPropagation();" style="cursor: pointer;">
+                            <img src="/projects/${projectName}/${img.filename}" style="width: 150px; height: auto; border-radius: 4px;">
+                        </div>
+                    `;
+                });
+                
+                html += '</div></div>';
+            });
+            
+            container.innerHTML = html;
+        }
+        
+        async function refreshImages() {
+            showLoading('Refreshing images...');
+            
+            for (const shot of parsedShots) {
+                const shot = shot;
+                try {
+                    const response = await fetch('/api/generate-images', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({
+                            project_name: projectName,
+                            shots: [shot],
+                            image_model: shot.image_model || document.getElementById('imageModel').value,
+                            aspect_ratio: shot.aspect_ratio || document.getElementById('aspectRatio').value
+                        })
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (data.success && data.results.length > 0) {
+                        const shotNum = data.results[0].shot.shot_number;
+                        imageResults[shotNum] = data.results[0].images;
+                        renderSelection();
+                        log('Generated images for shot ' + shotNum, 'success');
+                    } else {
+                        log('Failed to generate images for shot ' + shot.shot_number, 'error');
+                    }
+                } catch (err) {
+                    console.error('Error:', err);
+                    log('Error generating images: ' + err.message, 'error');
+                }
+            }
+            
+            alert('Images refreshed!');
+        }
+        
+        async function generateVideos() {
+            const selections = {};
+            
+            log('Looking for selected images...');
+            const imageOptions = document.querySelectorAll('.image-options');
+            log('Found ' + imageOptions.length + ' image-option containers');
+            
+            document.querySelectorAll('.image-options').forEach(container => {
+                const shotNum = container.dataset.shot;
+                log('Processing shot: ' + shotNum);
+                const selected = [];
+                container.querySelectorAll('.image-option.selected').forEach(el => {
+                    selected.push(el.dataset.variant);
+                    log('  Selected: ' + el.dataset.variant);
+                });
+                if (selected.length > 0) {
+                    selections[`SHOT-${String(shotNum).padStart(2, '0')}`] = selected;
+                }
+            });
+            
+            log('Total selections: ' + JSON.stringify(selections));
+            
+            if (Object.keys(selections).length === 0) {
+                alert('Please select at least one image. Check console for details.');
+                return;
+            }
+            
+            const videoModelSelect = document.getElementById('videoModel');
+            const videoModel = videoModelSelect ? videoModelSelect.value : 'kling_2.1';
+            const aspectRatio = document.getElementById('aspectRatio').value;
+            
+            log('Selections: ' + JSON.stringify(selections));
+            log('Starting video generation for ' + Object.keys(selections).length + ' shots with ' + videoModel);
+            
+            const totalVideos = Object.values(selections).flat().length;
+            
+            const loadingText = document.getElementById('loadingText');
+            const loadingSpinner = document.querySelector('.spinner');
+            
+            document.querySelectorAll('.card').forEach(el => el.classList.add('hidden'));
+            document.getElementById('loading').classList.remove('hidden');
+            loadingSpinner.style.display = 'block';
+            loadingText.textContent = `Preparing to generate ${totalVideos} videos with ${videoModel}...`;
+            
+            try {
+                const response = await fetch('/api/generate-videos', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        project_name: projectName,
+                        selections: selections,
+                        video_model: videoModel,
+                        aspect_ratio: aspectRatio
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (!data.results) {
+                    alert('Error: No results returned');
+                    goToStep(3);
+                    return;
+                }
+                
+                renderVideoResults(data.results);
+                log('Video generation completed!', 'success');
+                goToStep(4);
+            } catch (err) {
+                log('Error generating videos: ' + err.message, 'error');
+                alert('Error: ' + err.message);
+                goToStep(3);
+            }
+        }
+        
+        function renderVideoResults(results) {
+            const container = document.getElementById('videoResults');
+            container.innerHTML = '';
+            
+            if (!results) {
+                container.innerHTML = '<p style="color: red;">No results returned</p>';
+                return;
+            }
+            
+            const entries = Object.entries(results);
+            if (entries.length === 0) {
+                container.innerHTML = '<p style="color: orange;">No videos were generated</p>';
+                return;
+            }
+            
+            entries.forEach(([key, result]) => {
+                if (!result) return;
+                if (result.success) {
+                    const videoPath = result.filename ? `/videos/${projectName}/${result.filename}` : '';
+                    const html = `
+                        <div class="result-item success">
+                            <h4>${key}</h4>
+                            ${videoPath ? `
+                                <video controls style="width: 100%; max-width: 400px; border-radius: 8px; margin-top: 10px;">
+                                    <source src="${videoPath}" type="video/mp4">
+                                    Your browser does not support the video tag.
+                                </video>
+                                <p style="margin-top: 10px; color: #2ecc71;">✓ Video generated successfully</p>
+                            ` : `<p>Video saved to: ${result.filepath || result.filename}</p>`}
+                        </div>
+                    `;
+                    container.innerHTML += html;
+                } else {
+                    const html = `
+                        <div class="result-item error">
+                            <h4>${key}</h4>
+                            <p>Error: ${result.error || 'Unknown error'}</p>
+                        </div>
+                    `;
+                    container.innerHTML += html;
+                }
+            });
+        }
+        
+        log('VIDIVICI loaded. Ready.');
+    </script>
+    
+    <div style="margin-top: 40px; padding: 20px; border-top: 1px solid rgba(255,255,255,0.2);">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+            <h3 style="color: #fff;">Status Console</h3>
+            <button onclick="document.getElementById('statusConsole').innerHTML = '';" style="background: #95a5a6; color: white; padding: 5px 10px; border: none; border-radius: 4px; cursor: pointer;">Clear</button>
+        </div>
+        <div id="statusConsole" style="background: rgba(0,0,0,0.5); padding: 15px; border-radius: 8px; height: 200px; overflow-y: auto; font-family: monospace; font-size: 12px;"></div>
+    </div>
+</body>
+</html>
